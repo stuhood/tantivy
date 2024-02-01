@@ -24,7 +24,7 @@
 //!
 //! // Open the sstable.
 //! let sstable =
-//!     Dictionary::<MonotonicU64SSTable>::from_bytes(OwnedBytes::new(sstable_bytes)).unwrap();
+//!     Dictionary::<MonotonicU64SSTable>::from_bytes_for_tests(OwnedBytes::new(sstable_bytes)).unwrap();
 //!
 //! // Search for a key.
 //! let value = sstable.get(b"banana").unwrap();
@@ -44,7 +44,7 @@ mod block_match_automaton;
 mod delta;
 mod dictionary;
 pub mod merge;
-mod streamer;
+pub mod streamer;
 pub mod value;
 
 mod sstable_index_v3;
