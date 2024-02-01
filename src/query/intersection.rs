@@ -78,7 +78,7 @@ fn go_to_first_doc<TDocSet: DocSet>(docsets: &mut [TDocSet]) -> DocId {
 
 impl<TDocSet: DocSet> Intersection<TDocSet, TDocSet> {
     /// num_docs is the number of documents in the segment.
-    pub(crate) fn new(mut docsets: Vec<TDocSet>, num_docs: u32) -> Intersection<TDocSet, TDocSet> {
+    pub fn new(mut docsets: Vec<TDocSet>, num_docs: u32) -> Intersection<TDocSet, TDocSet> {
         let num_docsets = docsets.len();
         assert!(num_docsets >= 2);
         docsets.sort_by_key(|docset| docset.cost());
@@ -92,10 +92,27 @@ impl<TDocSet: DocSet> Intersection<TDocSet, TDocSet> {
             num_docs,
         }
     }
+
+    pub fn with_two_sets(
+        left: TDocSet,
+        right: TDocSet,
+        num_docs: u32,
+    ) -> Intersection<TDocSet, TDocSet> {
+        let mut docsets = vec![left, right];
+        go_to_first_doc(&mut docsets);
+        let left = docsets.remove(0);
+        let right = docsets.remove(0);
+        Intersection {
+            left,
+            right,
+            others: docsets,
+            num_docs,
+        }
+    }
 }
 
 impl<TDocSet: DocSet> Intersection<TDocSet, TDocSet> {
-    pub(crate) fn docset_mut_specialized(&mut self, ord: usize) -> &mut TDocSet {
+    pub fn docset_mut_specialized(&mut self, ord: usize) -> &mut TDocSet {
         match ord {
             0 => &mut self.left,
             1 => &mut self.right,
@@ -302,6 +319,41 @@ mod tests {
         let c = VecDocSet::from(vec![3, 9]);
         let intersection = Intersection::new(vec![a, b, c], 10);
         assert_eq!(intersection.doc(), TERMINATED);
+    }
+
+    #[test]
+    fn test_intersection_termination() {
+        use crate::query::score_combiner::DoNothingCombiner;
+        use crate::query::{BufferedUnionScorer, ConstScorer, VecDocSet};
+
+        let a1 = ConstScorer::new(VecDocSet::from(vec![0, 10000]), 1.0);
+        let a2 = ConstScorer::new(VecDocSet::from(vec![0, 10000]), 1.0);
+
+        let mut b_scorers = vec![];
+        for _ in 0..2 {
+            // Union matches 0 and 10000.
+            b_scorers.push(ConstScorer::new(VecDocSet::from(vec![0, 10000]), 1.0));
+        }
+        let union = BufferedUnionScorer::build(b_scorers, || DoNothingCombiner::default(), 30000);
+
+        // Mismatching scorer: matches 0 and 20000. Cost 100 to ensure it is last.
+        let mut m_docs = vec![0, 20000];
+        for i in 30000..30100 {
+            m_docs.push(i);
+        }
+        let m = ConstScorer::new(VecDocSet::from(m_docs), 1.0);
+
+        // Costs: A1=2, A2=2, Union=4, M=102.
+        // Sorted: A1, A2, Union, M.
+        // Left=A1, Right=A2, Others=[Union, M].
+        let mut intersection = crate::query::intersect_scorers(
+            vec![Box::new(a1), Box::new(a2), Box::new(union), Box::new(m)],
+            40000,
+        );
+
+        while intersection.doc() != TERMINATED {
+            intersection.advance();
+        }
     }
 
     // Strategy to generate sorted and deduplicated vectors of u32 document IDs

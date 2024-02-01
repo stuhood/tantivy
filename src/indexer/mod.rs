@@ -5,7 +5,7 @@
 //! [`Index::writer`](crate::Index::writer).
 
 /// Delete queue implementation for broadcasting delete operations to consumers.
-pub(crate) mod delete_queue;
+pub mod delete_queue;
 pub(crate) mod path_to_unordered_id;
 
 pub(crate) mod doc_id_mapping;
@@ -15,16 +15,16 @@ pub(crate) mod index_writer;
 pub(crate) mod index_writer_status;
 pub(crate) mod indexing_term;
 mod log_merge_policy;
-mod merge_index_test;
 mod merge_operation;
 pub(crate) mod merge_policy;
-pub(crate) mod merger;
+pub mod merger;
+mod merger_sorted_index_test;
 pub(crate) mod operation;
 pub(crate) mod prepared_commit;
 mod segment_entry;
 mod segment_manager;
 mod segment_register;
-pub(crate) mod segment_serializer;
+pub mod segment_serializer;
 pub(crate) mod segment_updater;
 pub(crate) mod segment_writer;
 pub(crate) mod single_segment_index_writer;
