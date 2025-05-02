@@ -451,7 +451,7 @@ impl TopHitsTopNComputer {
     }
 
     fn collect(&mut self, features: DocSortValuesAndFields, doc: DocAddress) {
-        self.top_n.push(features, doc);
+        self.top_n.push(features, doc, |_, _| true);
     }
 
     pub(crate) fn merge_fruits(&mut self, other_fruit: Self) -> crate::Result<()> {
@@ -557,6 +557,7 @@ impl TopHitsSegmentCollector {
                 segment_ord: self.segment_ordinal,
                 doc_id,
             },
+            |_, _| true,
         );
         Ok(())
     }

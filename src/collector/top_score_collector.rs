@@ -630,6 +630,50 @@ impl TopDocs {
     {
         CustomScoreTopCollector::new(custom_score, self.0.into_tscore())
     }
+
+    pub fn collect_segment_acceptor<Acceptor: Fn(&Score, &DocId) -> bool + Copy>(
+        &self,
+        weight: &dyn Weight,
+        segment_ord: u32,
+        reader: &SegmentReader,
+        acceptor: Acceptor,
+    ) -> crate::Result<<<TopDocs as Collector>::Child as SegmentCollector>::Fruit> {
+        let heap_len = self.0.limit + self.0.offset;
+        let mut top_n: TopNComputer<_, _> = TopNComputer::new(heap_len);
+
+        if let Some(alive_bitset) = reader.alive_bitset() {
+            let mut threshold = Score::MIN;
+            top_n.threshold = Some(threshold);
+            weight.for_each_pruning(Score::MIN, reader, &mut |doc, score| {
+                if alive_bitset.is_deleted(doc) {
+                    return threshold;
+                }
+                top_n.push(score, doc, acceptor);
+                threshold = top_n.threshold.unwrap_or(Score::MIN);
+                threshold
+            })?;
+        } else {
+            weight.for_each_pruning(Score::MIN, reader, &mut |doc, score| {
+                top_n.push(score, doc, acceptor);
+                top_n.threshold.unwrap_or(Score::MIN)
+            })?;
+        }
+
+        let fruit = top_n
+            .into_sorted_vec()
+            .into_iter()
+            .map(|cid| {
+                (
+                    cid.feature,
+                    DocAddress {
+                        segment_ord,
+                        doc_id: cid.doc,
+                    },
+                )
+            })
+            .collect();
+        Ok(fruit)
+    }
 }
 
 impl Collector for TopDocs {
@@ -663,41 +707,7 @@ impl Collector for TopDocs {
         segment_ord: u32,
         reader: &SegmentReader,
     ) -> crate::Result<<Self::Child as SegmentCollector>::Fruit> {
-        let heap_len = self.0.limit + self.0.offset;
-        let mut top_n: TopNComputer<_, _> = TopNComputer::new(heap_len);
-
-        if let Some(alive_bitset) = reader.alive_bitset() {
-            let mut threshold = Score::MIN;
-            top_n.threshold = Some(threshold);
-            weight.for_each_pruning(Score::MIN, reader, &mut |doc, score| {
-                if alive_bitset.is_deleted(doc) {
-                    return threshold;
-                }
-                top_n.push(score, doc);
-                threshold = top_n.threshold.unwrap_or(Score::MIN);
-                threshold
-            })?;
-        } else {
-            weight.for_each_pruning(Score::MIN, reader, &mut |doc, score| {
-                top_n.push(score, doc);
-                top_n.threshold.unwrap_or(Score::MIN)
-            })?;
-        }
-
-        let fruit = top_n
-            .into_sorted_vec()
-            .into_iter()
-            .map(|cid| {
-                (
-                    cid.feature,
-                    DocAddress {
-                        segment_ord,
-                        doc_id: cid.doc,
-                    },
-                )
-            })
-            .collect();
-        Ok(fruit)
+        self.collect_segment_acceptor(weight, segment_ord, reader, |_, _| true)
     }
 }
 
@@ -805,12 +815,21 @@ where
     /// Push a new document to the top n.
     /// If the document is below the current threshold, it will be ignored.
     #[inline]
-    pub fn push(&mut self, feature: Score, doc: D) {
+    pub fn push<Acceptor: Fn(&Score, &D) -> bool>(
+        &mut self,
+        feature: Score,
+        doc: D,
+        acceptor: Acceptor,
+    ) {
         if let Some(last_median) = self.threshold.clone() {
             if feature < last_median {
                 return;
             }
         }
+        if !acceptor(&feature, &doc) {
+            return;
+        }
+
         if self.buffer.len() == self.buffer.capacity() {
             let median = self.truncate_top_n();
             self.threshold = Some(median);

@@ -109,7 +109,7 @@ where T: PartialOrd + Clone
         let mut top_collector: TopNComputer<_, _> = TopNComputer::new(self.limit + self.offset);
         for child_fruit in children {
             for (feature, doc) in child_fruit {
-                top_collector.push(feature, doc);
+                top_collector.push(feature, doc, |_, _| true);
             }
         }
 
@@ -189,7 +189,7 @@ impl<T: PartialOrd + Clone> TopSegmentCollector<T> {
     /// will compare the lowest scoring item with the given one and keep whichever is greater.
     #[inline]
     pub fn collect(&mut self, doc: DocId, feature: T) {
-        self.topn_computer.push(feature, doc);
+        self.topn_computer.push(feature, doc, |_, _| true);
     }
 }
 
