@@ -9,7 +9,7 @@ use super::{value, vint, BlockReader};
 
 const FOUR_BIT_LIMITS: usize = 1 << 4;
 const VINT_MODE: u8 = 1u8;
-const BLOCK_LEN: usize = 4_000;
+const BLOCK_LEN: usize = 1_000;
 
 pub struct DeltaWriter<W, TValueWriter>
 where W: io::Write
@@ -53,7 +53,8 @@ where
 
         let block_len = buffer.len() + self.block.len();
 
-        if block_len > 2048 {
+        // Let's not!
+        if block_len > 1000000 {
             buffer.extend_from_slice(&self.block);
             self.block.clear();
 
@@ -63,17 +64,20 @@ where
 
             // verify compression had a positive impact
             if self.block.len() < buffer.len() {
+                println!(">>> compressed block of len {block_len} to {}", self.block.len());
                 self.write
                     .write_all(&(self.block.len() as u32 + 1).to_le_bytes())?;
                 self.write.write_all(&[1])?;
                 self.write.write_all(&self.block[..])?;
             } else {
+                println!(">>> failed to compress block of len {block_len} (to {})", self.block.len());
                 self.write
                     .write_all(&(block_len as u32 + 1).to_le_bytes())?;
                 self.write.write_all(&[0])?;
                 self.write.write_all(&buffer[..])?;
             }
         } else {
+            println!(">>> directly wrote block of len {block_len}");
             self.write
                 .write_all(&(block_len as u32 + 1).to_le_bytes())?;
             self.write.write_all(&[0])?;
