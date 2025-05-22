@@ -1675,6 +1675,7 @@ dependencies = [
  "criterion",
  "futures-util",
  "itertools 0.14.0",
+ "lazy_static",
  "names",
  "proptest",
  "rand",
