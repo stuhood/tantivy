@@ -9,7 +9,29 @@ use super::{value, vint, BlockReader};
 
 const FOUR_BIT_LIMITS: usize = 1 << 4;
 const VINT_MODE: u8 = 1u8;
-const BLOCK_LEN: usize = 4_000;
+
+lazy_static::lazy_static! {
+    static ref BLOCK_LEN: usize = {
+        std::env::var("TANTIVY_BLOCK_LEN")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(4_000)
+    };
+
+    static ref BLOCK_LEN_TRIGGERING_COMPRESSION: usize = {
+        std::env::var("TANTIVY_BLOCK_LEN_TRIGGERING_COMPRESSION")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(2_000)
+    };
+
+    static ref COMPRESSION_LEVEL: i32 = {
+        std::env::var("TANTIVY_COMPRESSION_LEVEL")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(3)
+    };
+}
 
 pub struct DeltaWriter<W, TValueWriter>
 where W: io::Write
@@ -29,11 +51,11 @@ where
 {
     pub fn new(wrt: W) -> Self {
         DeltaWriter {
-            block: Vec::with_capacity(BLOCK_LEN * 2),
+            block: Vec::with_capacity((*BLOCK_LEN) * 2),
             write: CountingWriter::wrap(BufWriter::new(wrt)),
             value_writer: TValueWriter::default(),
             stateless_buffer: Vec::new(),
-            block_len: BLOCK_LEN,
+            block_len: *BLOCK_LEN,
         }
     }
 
@@ -53,27 +75,36 @@ where
 
         let block_len = buffer.len() + self.block.len();
 
-        if block_len > 2048 {
+        if block_len > *BLOCK_LEN_TRIGGERING_COMPRESSION {
             buffer.extend_from_slice(&self.block);
             self.block.clear();
 
             let max_len = zstd::zstd_safe::compress_bound(buffer.len());
             self.block.reserve(max_len);
-            Compressor::new(3)?.compress_to_buffer(buffer, &mut self.block)?;
+            Compressor::new(*COMPRESSION_LEVEL)?.compress_to_buffer(buffer, &mut self.block)?;
 
             // verify compression had a positive impact
             if self.block.len() < buffer.len() {
+                println!(
+                    ">>> compressed block of len {block_len} to {}",
+                    self.block.len()
+                );
                 self.write
                     .write_all(&(self.block.len() as u32 + 1).to_le_bytes())?;
                 self.write.write_all(&[1])?;
                 self.write.write_all(&self.block[..])?;
             } else {
+                println!(
+                    ">>> failed to compress block of len {block_len} (to {})",
+                    self.block.len()
+                );
                 self.write
                     .write_all(&(block_len as u32 + 1).to_le_bytes())?;
                 self.write.write_all(&[0])?;
                 self.write.write_all(&buffer[..])?;
             }
         } else {
+            println!(">>> directly wrote block of len {block_len}");
             self.write
                 .write_all(&(block_len as u32 + 1).to_le_bytes())?;
             self.write.write_all(&[0])?;
