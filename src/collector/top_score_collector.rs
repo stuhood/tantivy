@@ -230,6 +230,8 @@ where TCollector: SegmentCollector<Fruit = Vec<(TermOrdinal, DocAddress)>> + 'st
             )
         };
 
+        println!(">>> fruit for segment was {fruit:?}, which resulted in {terms:?} ({:?})", self.order);
+
         assert!(
             result.expect("Failed to read terms from term dictionary"),
             "Not all terms were matched in segment."
