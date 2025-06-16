@@ -167,13 +167,16 @@ where
             let mut top_collector: TopNComputer<_, _, false> =
                 TopNComputer::new(self.limit + self.offset);
             for child_fruit in child_fruits {
+                println!(">>> fruit for segment was {child_fruit:#?} ({:?})", self.order);
                 for (feature, doc) in child_fruit {
                     top_collector.push(feature, doc);
                 }
             }
+            let res = top_collector
+                .into_sorted_vec();
+            println!(">>> result of merge was {res:#?} ({:?})", self.order);
 
-            Ok(top_collector
-                .into_sorted_vec()
+            Ok(res
                 .into_iter()
                 .skip(self.offset)
                 .map(|cdoc| (cdoc.feature, cdoc.doc))
@@ -229,8 +232,6 @@ where TCollector: SegmentCollector<Fruit = Vec<(TermOrdinal, DocAddress)>> + 'st
                 },
             )
         };
-
-        println!(">>> fruit for segment was {fruit:?}, which resulted in {terms:?} ({:?})", self.order);
 
         assert!(
             result.expect("Failed to read terms from term dictionary"),
