@@ -167,13 +167,15 @@ where
             let mut top_collector: TopNComputer<_, _, false> =
                 TopNComputer::new(self.limit + self.offset);
             for child_fruit in child_fruits {
-                println!(">>> fruit for segment was {child_fruit:#?} ({:?})", self.order);
+                println!(
+                    ">>> fruit for segment was {child_fruit:#?} ({:?})",
+                    self.order
+                );
                 for (feature, doc) in child_fruit {
                     top_collector.push(feature, doc);
                 }
             }
-            let res = top_collector
-                .into_sorted_vec();
+            let res = top_collector.into_sorted_vec();
             println!(">>> result of merge was {res:#?} ({:?})", self.order);
 
             Ok(res
@@ -708,7 +710,7 @@ impl TopDocs {
         score_tweaker: TScoreTweaker,
     ) -> impl Collector<Fruit = Vec<(TScore, DocAddress)>>
     where
-        TScore: 'static + Send + Sync + Clone + PartialOrd,
+        TScore: 'static + Send + Sync + Clone + PartialOrd + std::fmt::Debug,
         TScoreSegmentTweaker: ScoreSegmentTweaker<TScore> + 'static,
         TScoreTweaker: ScoreTweaker<TScore, Child = TScoreSegmentTweaker> + Send + Sync,
     {
@@ -821,7 +823,7 @@ impl TopDocs {
         custom_score: TCustomScorer,
     ) -> impl Collector<Fruit = Vec<(TScore, DocAddress)>>
     where
-        TScore: 'static + Send + Sync + Clone + PartialOrd,
+        TScore: 'static + Send + Sync + Clone + PartialOrd + std::fmt::Debug,
         TCustomSegmentScorer: CustomSegmentScorer<TScore> + 'static,
         TCustomScorer: CustomScorer<TScore, Child = TCustomSegmentScorer> + Send + Sync,
     {
@@ -985,7 +987,7 @@ impl<Score, D, const R: bool> From<TopNComputerDeser<Score, D, R>> for TopNCompu
 
 impl<Score, D, const R: bool> TopNComputer<Score, D, R>
 where
-    Score: PartialOrd + Clone,
+    Score: PartialOrd + Clone + std::fmt::Debug,
     D: Ord,
 {
     /// Create a new `TopNComputer`.
@@ -1029,7 +1031,14 @@ where
     #[inline(never)]
     fn truncate_top_n(&mut self) -> Score {
         // Use select_nth_unstable to find the top nth score
-        let (_, median_el, _) = self.buffer.select_nth_unstable(self.top_n);
+        let (left, median_el, right) = self.buffer.select_nth_unstable(self.top_n);
+
+        println!(
+            ">>> pivoted buffer at {}: left: {:?}, right: {:?}",
+            self.top_n,
+            left.iter().map(|d| &d.feature).collect::<Vec<_>>(),
+            right.iter().map(|d| &d.feature).collect::<Vec<_>>()
+        );
 
         let median_score = median_el.feature.clone();
         // Remove all elements below the top_n

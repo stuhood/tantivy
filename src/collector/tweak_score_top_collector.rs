@@ -48,7 +48,7 @@ pub trait ScoreTweaker<TScore>: Sync {
 impl<TScoreTweaker, TScore> Collector for TweakedScoreTopCollector<TScoreTweaker, TScore>
 where
     TScoreTweaker: ScoreTweaker<TScore> + Send + Sync,
-    TScore: 'static + PartialOrd + Clone + Send + Sync,
+    TScore: 'static + PartialOrd + Clone + Send + Sync + std::fmt::Debug,
 {
     type Fruit = Vec<(TScore, DocAddress)>;
 
@@ -88,7 +88,7 @@ where
 impl<TSegmentScoreTweaker, TScore> SegmentCollector
     for TopTweakedScoreSegmentCollector<TSegmentScoreTweaker, TScore>
 where
-    TScore: 'static + PartialOrd + Clone + Send + Sync,
+    TScore: 'static + PartialOrd + Clone + Send + Sync + std::fmt::Debug,
     TSegmentScoreTweaker: 'static + ScoreSegmentTweaker<TScore>,
 {
     type Fruit = Vec<(TScore, DocAddress)>;

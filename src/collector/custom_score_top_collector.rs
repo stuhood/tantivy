@@ -46,7 +46,7 @@ pub trait CustomScorer<TScore>: Sync {
 impl<TCustomScorer, TScore> Collector for CustomScoreTopCollector<TCustomScorer, TScore>
 where
     TCustomScorer: CustomScorer<TScore> + Send + Sync,
-    TScore: 'static + PartialOrd + Clone + Send + Sync,
+    TScore: 'static + PartialOrd + Clone + Send + Sync + std::fmt::Debug,
 {
     type Fruit = Vec<(TScore, DocAddress)>;
 
@@ -85,7 +85,7 @@ where
 
 impl<T, TScore> SegmentCollector for CustomScoreTopSegmentCollector<T, TScore>
 where
-    TScore: 'static + PartialOrd + Clone + Send + Sync,
+    TScore: 'static + PartialOrd + Clone + Send + Sync + std::fmt::Debug,
     T: 'static + CustomSegmentScorer<TScore>,
 {
     type Fruit = Vec<(TScore, DocAddress)>;

@@ -75,7 +75,7 @@ pub(crate) struct TopCollector<T> {
 }
 
 impl<T> TopCollector<T>
-where T: PartialOrd + Clone
+where T: PartialOrd + Clone + std::fmt::Debug
 {
     /// Creates a top collector, with a number of documents equal to "limit".
     ///
@@ -121,7 +121,7 @@ where T: PartialOrd + Clone
             .collect())
     }
 
-    pub(crate) fn for_segment<F: PartialOrd + Clone>(
+    pub(crate) fn for_segment<F: PartialOrd + Clone + std::fmt::Debug>(
         &self,
         segment_id: SegmentOrdinal,
         _: &SegmentReader,
@@ -156,7 +156,7 @@ pub(crate) struct TopSegmentCollector<T> {
     segment_ord: u32,
 }
 
-impl<T: PartialOrd + Clone> TopSegmentCollector<T> {
+impl<T: PartialOrd + Clone + std::fmt::Debug> TopSegmentCollector<T> {
     fn new(segment_ord: SegmentOrdinal, limit: usize) -> TopSegmentCollector<T> {
         TopSegmentCollector {
             topn_computer: TopNComputer::new(limit),
@@ -165,7 +165,7 @@ impl<T: PartialOrd + Clone> TopSegmentCollector<T> {
     }
 }
 
-impl<T: PartialOrd + Clone> TopSegmentCollector<T> {
+impl<T: PartialOrd + Clone + std::fmt::Debug> TopSegmentCollector<T> {
     pub fn harvest(self) -> Vec<(T, DocAddress)> {
         let segment_ord = self.segment_ord;
         self.topn_computer
