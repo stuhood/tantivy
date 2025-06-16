@@ -1034,8 +1034,8 @@ where
         let (left, median_el, right) = self.buffer.select_nth_unstable(self.top_n);
 
         println!(
-            ">>> pivoted buffer at {}: left: {:?}, right: {:?}",
-            self.top_n,
+            ">>> pivoted buffer around {:?}: left: {:?}, right: {:?}",
+            median_el.feature,
             left.iter().map(|d| &d.feature).collect::<Vec<_>>(),
             right.iter().map(|d| &d.feature).collect::<Vec<_>>()
         );
