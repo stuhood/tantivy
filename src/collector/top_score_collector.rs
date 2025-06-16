@@ -1011,6 +1011,8 @@ where
                 return;
             }
         }
+        println!(">>> accepting {feature:?} (vs {:?})", self.threshold);
+
         if self.buffer.len() == self.buffer.capacity() {
             let median = self.truncate_top_n();
             self.threshold = Some(median);
@@ -1034,6 +1036,16 @@ where
         // Use select_nth_unstable to find the top nth score
         let (left, median_el, right) = self.buffer.select_nth_unstable(self.top_n);
 
+        if !left.is_empty() {
+            let last_left = left.last().unwrap();
+            println!(
+                ">>> last el from left is less than median? {:?} < {:?} == {}",
+                last_left.feature,
+                median_el.feature,
+                last_left < median_el
+            );
+        }
+
         println!(
             ">>> pivoted buffer around {:?}: left: {:?}, right: {:?}",
             median_el.feature,
@@ -1053,7 +1065,18 @@ where
         if self.buffer.len() > self.top_n {
             self.truncate_top_n();
         }
+        println!(
+            ">>> into_sorted_vec: before {:?}",
+            self.buffer.iter().map(|d| &d.feature).collect::<Vec<_>>()
+        );
+
         self.buffer.sort_unstable();
+
+        println!(
+            ">>> into_sorted_vec: after {:?}",
+            self.buffer.iter().map(|d| &d.feature).collect::<Vec<_>>()
+        );
+
         self.buffer
     }
 
@@ -1078,8 +1101,8 @@ mod tests {
     use crate::time::format_description::well_known::Rfc3339;
     use crate::time::OffsetDateTime;
     use crate::{
-        assert_nearly_equals, DateTime, DocAddress, DocId, Index, IndexWriter, Order, Score,
-        SegmentReader,
+        assert_nearly_equals, DateTime, DocAddress, DocId, Document, Index, IndexWriter, Order,
+        Score, SegmentReader,
     };
 
     fn make_index() -> crate::Result<Index> {
@@ -1421,23 +1444,52 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_top_field_collector_string() -> crate::Result<()> {
+    fn make_topn_index() -> crate::Result<Index> {
         let mut schema_builder = Schema::builder();
         let city = schema_builder.add_text_field("city", TEXT | FAST);
+        let catchphrase = schema_builder.add_text_field("catchphrase", TEXT);
+        let altitude = schema_builder.add_f64_field("altitude", FAST);
         let schema = schema_builder.build();
         let index = Index::create_in_ram(schema);
-        let mut index_writer = index.writer_for_tests()?;
-        index_writer.add_document(doc!(
-                city => "alberta",
-        ))?;
-        index_writer.add_document(doc!(
-                city => "georgetown",
-        ))?;
-        index_writer.add_document(doc!(
-            city => "tokyo",
-        ))?;
-        index_writer.commit()?;
+
+        fn create_segment(index: &Index, docs: Vec<impl Document>) -> crate::Result<()> {
+            let mut index_writer = index.writer_for_tests()?;
+            for doc in docs {
+                index_writer.add_document(doc)?;
+            }
+            index_writer.commit()?;
+            Ok(())
+        }
+
+        create_segment(
+            &index,
+            vec![
+                doc!(
+                    city => "austin",
+                    catchphrase => "Hills, Barbeque, Glow",
+                    altitude => 149.0,
+                ),
+                doc!(
+                    city => "greenville",
+                    catchphrase => "Grow, Glow, Glow",
+                    altitude => 27.0,
+                ),
+            ],
+        )?;
+        create_segment(
+            &index,
+            vec![doc!(
+                city => "tokyo",
+                catchphrase => "Glow, Glow, Glow",
+                altitude => 40.0,
+            )],
+        )?;
+        Ok(index)
+    }
+
+    #[test]
+    fn test_top_field_collector_string() -> crate::Result<()> {
+        let index = make_topn_index()?;
 
         fn query(
             index: &Index,
@@ -1445,6 +1497,7 @@ mod tests {
             limit: usize,
             offset: usize,
         ) -> crate::Result<Vec<(String, DocAddress)>> {
+            println!(">>> running query {order:?}, {limit}, {offset}");
             let searcher = index.reader()?.searcher();
             let top_collector = TopDocs::with_limit(limit)
                 .and_offset(offset)
@@ -1453,37 +1506,52 @@ mod tests {
         }
 
         assert_eq!(
+            &query(&index, Order::Desc, 1, 0)?,
+            &[("tokyo".to_owned(), DocAddress::new(1, 0)),]
+        );
+
+        assert_eq!(
             &query(&index, Order::Desc, 3, 0)?,
             &[
-                ("tokyo".to_owned(), DocAddress::new(0, 2)),
-                ("georgetown".to_owned(), DocAddress::new(0, 1)),
-                ("alberta".to_owned(), DocAddress::new(0, 0)),
+                ("tokyo".to_owned(), DocAddress::new(1, 0)),
+                ("greenville".to_owned(), DocAddress::new(0, 1)),
+                ("austin".to_owned(), DocAddress::new(0, 0)),
             ]
         );
 
         assert_eq!(
             &query(&index, Order::Desc, 2, 1)?,
             &[
-                ("georgetown".to_owned(), DocAddress::new(0, 1)),
-                ("alberta".to_owned(), DocAddress::new(0, 0)),
+                ("greenville".to_owned(), DocAddress::new(0, 1)),
+                ("austin".to_owned(), DocAddress::new(0, 0)),
             ]
+        );
+
+        assert_eq!(
+            &query(&index, Order::Desc, 1, 0)?,
+            &[("tokyo".to_owned(), DocAddress::new(1, 0)),]
         );
 
         assert_eq!(
             &query(&index, Order::Asc, 3, 0)?,
             &[
-                ("alberta".to_owned(), DocAddress::new(0, 0)),
-                ("georgetown".to_owned(), DocAddress::new(0, 1)),
-                ("tokyo".to_owned(), DocAddress::new(0, 2)),
+                ("austin".to_owned(), DocAddress::new(0, 0)),
+                ("greenville".to_owned(), DocAddress::new(0, 1)),
+                ("tokyo".to_owned(), DocAddress::new(1, 0)),
             ]
         );
 
         assert_eq!(
             &query(&index, Order::Asc, 2, 1)?,
             &[
-                ("georgetown".to_owned(), DocAddress::new(0, 1)),
-                ("tokyo".to_owned(), DocAddress::new(0, 2)),
+                ("greenville".to_owned(), DocAddress::new(0, 1)),
+                ("tokyo".to_owned(), DocAddress::new(1, 0)),
             ]
+        );
+
+        assert_eq!(
+            &query(&index, Order::Asc, 1, 0)?,
+            &[("austin".to_owned(), DocAddress::new(0, 0)),]
         );
         Ok(())
     }
