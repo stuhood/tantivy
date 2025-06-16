@@ -1007,6 +1007,7 @@ where
     pub fn push(&mut self, feature: Score, doc: D) {
         if let Some(last_median) = self.threshold.clone() {
             if feature < last_median {
+                println!(">>> eliminating {feature:?} (less than {last_median:?})");
                 return;
             }
         }
