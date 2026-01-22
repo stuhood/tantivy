@@ -133,6 +133,7 @@ impl<TDocSet: DocSet, TOtherDocSet: DocSet> DocSet for Intersection<TDocSet, TOt
         loop {
             // In the first part we look for a document in the intersection
             // of the two rarest `DocSet` in the intersection.
+            eprintln!("Intersection::advance loop candidate={}", candidate);
 
             loop {
                 if right.seek_into_the_danger_zone(candidate) {

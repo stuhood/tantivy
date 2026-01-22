@@ -165,7 +165,9 @@ impl DocSet for SegmentPostings {
         } else {
             self.cur += 1;
         }
-        self.doc()
+        let doc = self.doc();
+        eprintln!("SegmentPostings::advance doc={}", doc);
+        doc
     }
 
     fn seek(&mut self, target: DocId) -> DocId {
@@ -179,6 +181,7 @@ impl DocSet for SegmentPostings {
         self.cur = self.block_cursor.seek(target);
         let doc = self.doc();
         debug_assert!(doc >= target);
+        eprintln!("SegmentPostings::seek target={} result={}", target, doc);
         doc
     }
 

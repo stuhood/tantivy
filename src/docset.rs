@@ -75,6 +75,7 @@ pub trait DocSet: Send {
         if current_doc < target {
             self.seek(target);
         }
+        eprintln!("seek_into_the_danger_zone target={} current={} result={}", target, current_doc, self.doc() == target);
         self.doc() == target
     }
 
